@@ -9,5 +9,6 @@
   "author": {
     "name": "Roy Lee",
     "email": "ylee@costar.com"
-  }
+  },
+  "wailsjsdir": "./frontend/src/lib"
 }
