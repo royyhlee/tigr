@@ -19,7 +19,9 @@
         console.log(store);
         config = await store?.get<GitToolConfig>('git-tool-store');
         console.log(config);
+        repoPath = config?.selected || '';
         git = await Git.create(config?.selected || '');
+        await getBranches();
     });
 
     async function getBranches() {
@@ -51,8 +53,7 @@
 
         if (isGitRepo) {
             repoPath = path;
-            store?.set('git-tool-store', { selected: path });
-            store?.save();
+            await store?.set('git-tool-store', { selected: path });
             message = `Added repository: ${path}`;
         } else {
             message = `Not a valid git repository: ${path}`;
