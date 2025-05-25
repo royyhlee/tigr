@@ -1,15 +1,25 @@
 <script lang="ts">
     import { Git } from "$lib/git";
+    import type { GitToolConfig } from "$lib/repository-store";
     import { open } from "@tauri-apps/plugin-dialog";
+    import { load, Store } from "@tauri-apps/plugin-store";
     import { onMount } from "svelte";
 
-    let repoPath = $state('C:/Users/ylee/Projects/sandbox/apt-git-tool');
+    let repoPath = $state('');
     let branches = $state<string[]>([]);
     let message = $state('');
     let git: Git | null = null;
+    let selectedRepo: string;
+    let repositories: string[] = [];
+    let store: Store | undefined = undefined;
+    let config: GitToolConfig | undefined = undefined;
 
     onMount(async () => {
-        git = await Git.create(repoPath);
+        store = await load('store.json', { autoSave: true });
+        console.log(store);
+        config = await store?.get<GitToolConfig>('git-tool-store');
+        console.log(config);
+        git = await Git.create(config?.selected || '');
     });
 
     async function getBranches() {
@@ -27,11 +37,11 @@
         }
     }
 
-    async function openDirectory() {
+    async function addRepository() {
         const file = await open({
             multiple: false,
             directory: true,
-            title: 'Select Repository',
+            title: 'Add Repository',
         });
 
         if (!file || typeof file !== 'string') return;
@@ -41,7 +51,9 @@
 
         if (isGitRepo) {
             repoPath = path;
-            message = `Selected repository: ${path}`;
+            store?.set('git-tool-store', { selected: path });
+            store?.save();
+            message = `Added repository: ${path}`;
         } else {
             message = `Not a valid git repository: ${path}`;
         }
@@ -58,7 +70,7 @@
     {/each}
 
     <button type="button" onclick={getBranches}>Branches</button>
-    <button type="button" onclick={openDirectory}>Select Repository</button>
+    <button type="button" onclick={addRepository}>Add Repository</button>
 </main>
 
 <style></style> 
