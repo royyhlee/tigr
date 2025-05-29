@@ -10,7 +10,7 @@
     let message = $state("");
     let git: Git | null = null;
     let selectedRepo: string;
-    let repositories: string[] = [];
+    let repositories: string[] = $state([]);
     let store: Store | undefined = undefined;
     let config: GitToolConfig | undefined = undefined;
 
@@ -20,6 +20,7 @@
         config = await store?.get<GitToolConfig>("git-tool-store");
         console.log(config);
         repoPath = config?.selected || "";
+        repositories = config?.repositories || [];
         git = await Git.create(config?.selected || "");
         await getBranches();
     });
@@ -53,23 +54,33 @@
 
         if (isGitRepo) {
             repoPath = path;
-            await store?.set("git-tool-store", { selected: path });
-            message = `Added repository: ${path}`;
 
+            if (!repositories.includes(path)) {
+                repositories = [repositories || [], path].flat();
+            }
+            await store?.set("git-tool-store", { selected: path, repositories });
+            message = `Added repository: ${path}`;
             await getBranches();
         } else {
             message = `Not a valid git repository: ${path}`;
         }
     }
+
 </script>
 
 <main class="container">
     <p>{message}</p>
     <p>{repoPath}</p>
 
-    <div class="branches">
+    <div class="scroll-region">
         {#each branches as branch}
             <p>{branch}</p>
+        {/each}
+    </div>
+
+    <div class="scroll-region">
+        {#each repositories as repo}
+            <p>{repo}</p>
         {/each}
     </div>
 
@@ -78,9 +89,9 @@
 </main>
 
 <style>
-    .branches {
+    .scroll-region {
         overflow-y: auto;
-        height: 200px;
+        max-height: 200px;
         border: 1px solid #ccc;
         padding: 10px;
     }
