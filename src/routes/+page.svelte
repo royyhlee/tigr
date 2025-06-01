@@ -58,41 +58,57 @@
             if (!repositories.includes(path)) {
                 repositories = [repositories || [], path].flat();
             }
-            await store?.set("git-tool-store", { selected: path, repositories });
+            await store?.set("git-tool-store", {
+                selected: path,
+                repositories,
+            });
             message = `Added repository: ${path}`;
             await getBranches();
         } else {
             message = `Not a valid git repository: ${path}`;
         }
     }
-
 </script>
 
 <main class="container">
-    <p>{message}</p>
-    <p>{repoPath}</p>
-
-    <div class="scroll-region">
-        {#each branches as branch}
-            <p>{branch}</p>
-        {/each}
-    </div>
-
-    <div class="scroll-region">
-        {#each repositories as repo}
-            <p>{repo}</p>
-        {/each}
+    <div class="layout">
+        <div class="scroll-region">
+            {#each repositories as repo}
+                <div class={repoPath === repo ? "selected" : ""}>{repo}</div>
+            {/each}
+        </div>
+        <div class="scroll-region">
+            {#each branches as branch}
+                <div>{branch}</div>
+            {/each}
+        </div>
     </div>
 
     <button type="button" onclick={getBranches}>Branches</button>
     <button type="button" onclick={addRepository}>Add Repository</button>
+
+    <p>{message}</p>
 </main>
 
 <style>
+    .layout {
+        display: flex;
+        flex-direction: row;
+        gap: 8px;
+        height: 320px;
+    }
+
     .scroll-region {
         overflow-y: auto;
-        max-height: 200px;
         border: 1px solid #ccc;
         padding: 10px;
+
+        div {
+            padding: 0.5rem 0.25rem;
+        }
+
+        .selected {
+            background-color: rgba(0, 123, 255, 0.1);
+        }
     }
 </style>
