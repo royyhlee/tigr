@@ -68,18 +68,54 @@
             message = `Not a valid git repository: ${path}`;
         }
     }
+
+    async function selectRepository(e: Event) {
+        const target = e.target as HTMLSelectElement;
+        const repo = target.value;
+
+        if (repo === null) return;
+        repoPath = repo;
+        git = await Git.create(repo);
+        await store?.set("git-tool-store", {
+            selected: repo,
+            repositories,
+        });
+        message = `Selected repository: ${repo}`;
+        await getBranches();
+    }
+
+    async function checkout(e: MouseEvent) {
+        const target = e.target as HTMLButtonElement;
+        const branch = target.textContent?.trim();
+
+        if (!branch) return;
+
+        if (!git) {
+            message = "No repository selected";
+            return;
+        }
+
+        const { result, error } = await git.checkout(branch);
+        if (error) {
+            message = `Error checking out branch ${branch}: ${error}`;
+        } else {
+            message = `Checked out branch: ${branch}`;
+            await getBranches();
+        }
+    }
+
 </script>
 
 <main class="container">
+    <select onchange={(e) => selectRepository(e)} bind:value={repoPath}>
+        {#each repositories as repo}
+            <option class={repoPath === repo ? "selected" : ""} value={repo}>{repo}</option>
+        {/each}
+    </select>
     <div class="layout">
         <div class="scroll-region">
-            {#each repositories as repo}
-                <div class={repoPath === repo ? "selected" : ""}>{repo}</div>
-            {/each}
-        </div>
-        <div class="scroll-region">
             {#each branches as branch}
-                <div>{branch}</div>
+                <button type="button" on:click={() => checkout(e)}>{branch}</button>
             {/each}
         </div>
     </div>

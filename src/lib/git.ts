@@ -36,12 +36,28 @@ export function invokeGit(params: {
 }
 
 export class Git {
-  constructor(private repoPath: string) {}
+  constructor(private repoPath: string) { }
+
+  private invokeGitCommand(params: {
+    cmd: GitCommand;
+    repoPath?: string;
+    args?: string[];
+  }) {
+    const { cmd, repoPath, args } = params;
+
+    if (!this.repoPath || !repoPath) {
+      throw new Error('Repository path is not set.');
+    }
+
+    return invoke<string>("git", {
+      repoPath: this.repoPath || repoPath,
+      args: [cmd, ...(args ?? [])],
+    });
+  }
 
   async getBranches(args?: string[]) {
     try {
-      const result = await invokeGit({
-        repoPath: this.repoPath,
+      const result = await this.invokeGitCommand({
         cmd: "branch",
         args: [...(args ?? [])],
       });
@@ -57,14 +73,17 @@ export class Git {
     }
   }
 
-  static async create(repoPath: string) {
-    const isGitRepo = await Git.isGitRepository(repoPath);
-    return isGitRepo ? new Git(repoPath) : null;
+  async checkout(branch: string) {
 
   }
 
+  static async create(repoPath: string) {
+    const isGitRepo = await Git.isGitRepository(repoPath);
+    return isGitRepo ? new Git(repoPath) : null;
+  }
+
   static async isGitRepository(repoPath: string) {
-    const result = await invokeGit({
+    const result = await this.invokeGitCommand({
       repoPath,
       cmd: "rev-parse",
       args: ["--is-inside-work-tree"],
