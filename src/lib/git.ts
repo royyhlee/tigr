@@ -18,63 +18,54 @@ export type GitCommand =
   | "revert"
   | "rev-parse";
 
-export type GitArgs = {
-  [K in GitCommand]?: string[];
-};
-
-export function invokeGit(params: {
-  repoPath: string;
-  cmd: GitCommand;
-  args?: string[];
-}) {
-  const { repoPath, cmd, args } = params;
-
-  return invoke<string>("git", {
-    repoPath,
-    args: [cmd, ...(args ?? [])],
-  });
-}
-
 export class Git {
   constructor(private repoPath: string) { }
 
-  private invokeGitCommand(params: {
+  private static invokeGitCommand(params: {
+    repoPath: string;
     cmd: GitCommand;
-    repoPath?: string;
     args?: string[];
   }) {
-    const { cmd, repoPath, args } = params;
-
-    if (!this.repoPath || !repoPath) {
-      throw new Error('Repository path is not set.');
-    }
-
+    const { repoPath, cmd, args } = params;
     return invoke<string>("git", {
-      repoPath: this.repoPath || repoPath,
-      args: [cmd, ...(args ?? [])],
+      repoPath,
+      args: [cmd, ...(args ?? [])]
     });
   }
 
   async getBranches(args?: string[]) {
     try {
-      const result = await this.invokeGitCommand({
+      const result = await Git.invokeGitCommand({
+        repoPath: this.repoPath,
         cmd: "branch",
-        args: [...(args ?? [])],
+        args: [...(args ?? [])]
       });
 
-      const branches = result
+      const lines = result
         .split("\n")
-        .map(branch => branch.trim())
-        .filter(branch => branch);
+        .map((branch) => branch.trim())
+        .filter((branch) => branch);
 
-      return { result: branches };
+      const currentBranch = lines.find((b) => b.startsWith("*"))?.substring(2);
+      const allBranches = lines.map((b) => (b.startsWith("*") ? b.substring(2) : b));
+
+      return { result: { all: allBranches, current: currentBranch } };
     } catch (error) {
-      return { error, result: [] };
+      return { error, result: { all: [], current: undefined } };
     }
   }
 
   async checkout(branch: string) {
-
+    try {
+      const result = await Git.invokeGitCommand({
+        repoPath: this.repoPath,
+        cmd: "checkout",
+        args: [branch]
+      });
+      return { result };
+    } catch (error) {
+      return { error };
+    }
   }
 
   static async create(repoPath: string) {
@@ -83,12 +74,15 @@ export class Git {
   }
 
   static async isGitRepository(repoPath: string) {
-    const result = await this.invokeGitCommand({
-      repoPath,
-      cmd: "rev-parse",
-      args: ["--is-inside-work-tree"],
-    });
-
-    return result.trim() === "true";
+    try {
+      const result = await this.invokeGitCommand({
+        repoPath,
+        cmd: "rev-parse",
+        args: ["--is-inside-work-tree"]
+      });
+      return result.trim() === "true";
+    } catch (error) {
+      return false;
+    }
   }
 }

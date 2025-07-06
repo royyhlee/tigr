@@ -1,150 +1,134 @@
 <script lang="ts">
-    import { Git } from "$lib/git";
-    import type { GitToolConfig } from "$lib/repository-store";
-    import { open } from "@tauri-apps/plugin-dialog";
-    import { load, Store } from "@tauri-apps/plugin-store";
-    import { onMount } from "svelte";
+	import { Git } from "$lib/git";
+	import { config } from "$lib/store";
+	import type { GitToolConfig } from "$lib/repository-store";
+	import { open } from "@tauri-apps/plugin-dialog";
+	import { load, Store } from "@tauri-apps/plugin-store";
+	import { onMount } from "svelte";
+	import RepositorySelector from "$lib/components/RepositorySelector.svelte";
+	import BranchList from "$lib/components/BranchList.svelte";
 
-    let repoPath = $state("");
-    let branches = $state<string[]>([]);
-    let message = $state("");
-    let git: Git | null = null;
-    let selectedRepo: string;
-    let repositories: string[] = $state([]);
-    let store: Store | undefined = undefined;
-    let config: GitToolConfig | undefined = undefined;
+	let branches = $state<string[]>([]);
+	let message = $state("");
+	let git: Git | null = null;
+	let store: Store | undefined = undefined;
 
-    onMount(async () => {
-        store = await load("store.json", { autoSave: true });
-        console.log(store);
-        config = await store?.get<GitToolConfig>("git-tool-store");
-        console.log(config);
-        repoPath = config?.selected || "";
-        repositories = config?.repositories || [];
-        git = await Git.create(config?.selected || "");
-        await getBranches();
-    });
+	async function initialize() {
+		store = await load("store.json", { autoSave: true });
+		const storedConfig = await store?.get<GitToolConfig>("git-tool-store");
+		if (storedConfig) {
+			$config = storedConfig;
+		}
 
-    async function getBranches() {
-        if (!git) {
-            message = "No repository selected";
-            return;
-        }
+		if (!$config.selected && $config.repositories && $config.repositories.length > 0) {
+			$config.selected = $config.repositories[0];
+			await store?.set("git-tool-store", $config);
+		}
 
-        let { result, error } = await git.getBranches(["--all"]);
-        if (error) {
-            message = `Error: ${error}`;
-        } else {
-            branches = result;
-            message = `Retrieved branches`;
-        }
-    }
+		if ($config.selected) {
+			git = await Git.create($config.selected);
+			await getBranches();
+		}
+	}
 
-    async function addRepository() {
-        const file = await open({
-            multiple: false,
-            directory: true,
-            title: "Add Repository",
-        });
+	onMount(async () => {
+		await initialize();
+	});
 
-        if (!file || typeof file !== "string") return;
+	async function getBranches() {
+		if (!git) {
+			message = "No repository selected";
+			return;
+		}
 
-        const path = (file as string).replaceAll("\\", "/");
-        const isGitRepo = await Git.isGitRepository(path);
+		let { result, error } = await git.getBranches(["--all"]);
+        console.log(result);
+		if (error) {
+			message = `Error: ${error}`;
+		} else {
+			branches = result.all;
+			message = `Retrieved branches`;
+		}
+	}
 
-        if (isGitRepo) {
-            repoPath = path;
+	async function addRepository() {
+		const file = await open({
+			multiple: false,
+			directory: true,
+			title: "Add Repository"
+		});
 
-            if (!repositories.includes(path)) {
-                repositories = [repositories || [], path].flat();
-            }
-            await store?.set("git-tool-store", {
-                selected: path,
-                repositories,
-            });
-            message = `Added repository: ${path}`;
-            await getBranches();
-        } else {
-            message = `Not a valid git repository: ${path}`;
-        }
-    }
+		if (typeof file !== "string") return;
 
-    async function selectRepository(e: Event) {
-        const target = e.target as HTMLSelectElement;
-        const repo = target.value;
+		const path = file.replaceAll("\\", "/");
+		const isGitRepo = await Git.isGitRepository(path);
 
-        if (repo === null) return;
-        repoPath = repo;
-        git = await Git.create(repo);
-        await store?.set("git-tool-store", {
-            selected: repo,
-            repositories,
-        });
-        message = `Selected repository: ${repo}`;
-        await getBranches();
-    }
+		if (!isGitRepo) {
+			message = `Not a valid git repository: ${path}`;
+			return;
+		}
 
-    async function checkout(e: MouseEvent) {
-        const target = e.target as HTMLButtonElement;
-        const branch = target.textContent?.trim();
+		$config.selected = path;
+		if (!$config.repositories?.includes(path)) {
+			$config.repositories = [...($config.repositories ?? []), path];
+		}
+		await store?.set("git-tool-store", $config);
+		git = await Git.create(path);
+		message = `Added repository: ${path}`;
+		await getBranches();
+	}
 
-        if (!branch) return;
+	async function handleRepoSelection(detail: { repo: string }) {
+		const { repo } = detail;
+		$config.selected = repo;
+		git = await Git.create(repo);
+		await store?.set("git-tool-store", $config);
+		message = `Selected repository: ${repo}`;
+		await getBranches();
+	}
 
-        if (!git) {
-            message = "No repository selected";
-            return;
-        }
+	function handleCheckout(detail: { branch: string }) {
+		const { branch } = detail;
+		message = `Checked out branch: ${branch}`;
+		getBranches();
+	}
 
-        const { result, error } = await git.checkout(branch);
-        if (error) {
-            message = `Error checking out branch ${branch}: ${error}`;
-        } else {
-            message = `Checked out branch: ${branch}`;
-            await getBranches();
-        }
-    }
-
+	function handleError(detail: { message: string }) {
+		message = detail.message;
+	}
 </script>
 
 <main class="container">
-    <select onchange={(e) => selectRepository(e)} bind:value={repoPath}>
-        {#each repositories as repo}
-            <option class={repoPath === repo ? "selected" : ""} value={repo}>{repo}</option>
-        {/each}
-    </select>
-    <div class="layout">
-        <div class="scroll-region">
-            {#each branches as branch}
-                <button type="button" on:click={() => checkout(e)}>{branch}</button>
-            {/each}
-        </div>
-    </div>
+	<RepositorySelector onSelect={handleRepoSelection} />
+	<div class="layout">
+		<BranchList {git} {branches} onCheckout={handleCheckout} onError={handleError} />
+	</div>
 
-    <button type="button" onclick={getBranches}>Branches</button>
-    <button type="button" onclick={addRepository}>Add Repository</button>
+	<button type="button" onclick={getBranches}>Branches</button>
+	<button type="button" onclick={addRepository}>Add Repository</button>
 
-    <p>{message}</p>
+	<p>{message}</p>
 </main>
 
 <style>
-    .layout {
-        display: flex;
-        flex-direction: row;
-        gap: 8px;
-        height: 320px;
-    }
+	.layout {
+		display: flex;
+		flex-direction: row;
+		gap: 8px;
+		height: 320px;
+	}
 
-    .scroll-region {
-        overflow-y: auto;
-        border: 1px solid #ccc;
-        padding: 10px;
+	.scroll-region {
+		overflow-y: auto;
+		border: 1px solid #ccc;
+		padding: 10px;
 
-        div {
-            padding: 0.5rem 0.25rem;
-        }
+		div {
+			padding: 0.5rem 0.25rem;
+		}
 
-        .selected {
-            background-color: rgba(0, 123, 255, 0.1);
-        }
-    }
+		.selected {
+			background-color: rgba(0, 123, 255, 0.1);
+		}
+	}
 </style>
